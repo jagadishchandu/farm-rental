@@ -3,7 +3,6 @@ const API_BASE = "http://localhost:8000";
 
 function token(){ return localStorage.getItem("access_token"); }
 function role(){ return localStorage.getItem("role"); }
-
 function setAuth(data){
   localStorage.setItem("access_token", data.access_token);
   localStorage.setItem("role", data.role);
@@ -59,21 +58,18 @@ async function api(path, opts={}){
 
 async function adminListTools(){ return await api(`/admin/tools`); }
 async function adminCreateTool(p){
-  return await api(`/admin/tools`, {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify(p)
-  });
+  return await api(`/admin/tools`, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(p) });
 }
 async function adminUpdateTool(id,p){
-  return await api(`/admin/tools/${id}`, {
-    method:"PUT",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify(p)
-  });
+  return await api(`/admin/tools/${id}`, { method:"PUT", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(p) });
 }
 async function adminDeleteTool(id){
   return await api(`/admin/tools/${id}`, { method:"DELETE" });
 }
 
-window.AdminAPI = { token, role, setAuth, clearAuth, login, registerAdmin, adminListTools, adminCreateTool, adminUpdateTool, adminDeleteTool };
+window.AdminAPI = {
+  API_BASE,
+  token, role, setAuth, clearAuth,
+  login, registerAdmin,
+  adminListTools, adminCreateTool, adminUpdateTool, adminDeleteTool
+};
