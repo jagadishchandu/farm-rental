@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Admin • Register</title>
+  <title>Customer • Register</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -14,8 +14,8 @@
         <div class="brand">
           <div class="logo"></div>
           <div>
-            <h1 class="h1">Register Admin</h1>
-            <p class="sub">Requires ADMIN_CREATE_SECRET</p>
+            <h1 class="h1">Create Customer Account</h1>
+            <p class="sub">Credentials are stored securely (hashed) in Postgres</p>
           </div>
         </div>
         <a class="btn" href="login.html">Back to sign in</a>
@@ -26,7 +26,7 @@
           <div class="grid" style="grid-template-columns:1fr 1fr;">
             <div class="stack">
               <div class="small">Email</div>
-              <input class="input" id="email" placeholder="admin@company.com" autocomplete="username" />
+              <input class="input" id="email" placeholder="you@company.com" autocomplete="username" />
             </div>
             <div class="stack">
               <div class="small">Password (min 6)</div>
@@ -34,13 +34,8 @@
             </div>
           </div>
 
-          <div class="stack" style="margin-top:10px;">
-            <div class="small">Admin secret</div>
-            <input class="input" id="secret" type="password" placeholder="admin-create-secret" />
-          </div>
-
           <div class="row" style="margin-top:12px;">
-            <button class="btn primary" id="regBtn">Create admin</button>
+            <button class="btn primary" id="regBtn">Create account</button>
           </div>
 
           <div id="msg" class="msg error"></div>
@@ -57,17 +52,16 @@
       msg.className = "msg";
       msg.textContent = "";
       try{
-        await AdminAPI.registerAdmin(
+        await CustomerAPI.registerCustomer(
           document.getElementById("email").value.trim(),
-          document.getElementById("password").value,
-          document.getElementById("secret").value
+          document.getElementById("password").value
         );
         msg.className = "msg ok";
-        msg.textContent = "Admin created. Redirecting...";
+        msg.textContent = "Account created. Redirecting to sign in...";
         setTimeout(()=> window.location.href="login.html", 900);
       }catch(e){
         msg.className = "msg error";
-        msg.textContent = "Admin registration failed (secret/email).";
+        msg.textContent = "Registration failed (email exists or invalid).";
       }
     };
   </script>

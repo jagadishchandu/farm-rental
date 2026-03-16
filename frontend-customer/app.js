@@ -2,58 +2,45 @@
 const API_BASE = "http://localhost:8000";
 
 function token(){ return localStorage.getItem("access_token"); }
-function requireAuth(){ if(!token()) window.location.href="login.html"; }
+function role(){ return localStorage.getItem("role"); }
 
-function logout(){
+function setAuth(data){
+  localStorage.setItem("access_token", data.access_token);
+  localStorage.setItem("role", data.role);
+  localStorage.setItem("user_id", String(data.user_id));
+}
+function clearAuth(){
   localStorage.removeItem("access_token");
   localStorage.removeItem("role");
-  localStorage.removeItem("draft_order_id");
-  window.location.href="login.html";
+  localStorage.removeItem("user_id");
 }
 
-function toIsoUtc(dtLocalValue){
-  if(!dtLocalValue) return "";
-  const d = new Date(dtLocalValue);
-  if(Number.isNaN(d.getTime())) return "";
-  return d.toISOString();
-}
-
-function fmtLocal(iso){
-  try{
-    const d = new Date(iso);
-    return new Intl.DateTimeFormat(undefined,{dateStyle:"medium",timeStyle:"short"}).format(d);
-  }catch{ return iso; }
-}
-
-function toast(title, detail){
-  const el = document.getElementById("toast");
-  if(!el) return;
-  el.querySelector(".t").textContent = title || "";
-  el.querySelector(".d").textContent = detail || "";
-  el.classList.add("show");
-  clearTimeout(window.__toastTimer);
-  window.__toastTimer = setTimeout(()=> el.classList.remove("show"), 3200);
-}
-
-function tryParseJsonText(t){
-  try { return JSON.parse(t); } catch { return null; }
-}
-
-async function login(email,password){
+async function login(email, password){
   const body = new URLSearchParams();
   body.set("username", email);
   body.set("password", password);
 
-  const res = await fetch(`${API_BASE}/auth/login`,{
+  const res = await fetch(`${API_BASE}/auth/login`, {
     method:"POST",
     headers:{ "Content-Type":"application/x-www-form-urlencoded" },
     body
   });
   if(!res.ok) throw new Error(await res.text());
   const data = await res.json();
-  localStorage.setItem("access_token", data.access_token);
-  localStorage.setItem("role", data.role);
+  setAuth(data);
   return data;
+}
+
+async function registerCustomer(email, password){
+  const res = await fetch(`${API_BASE}/auth/register`,{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({ email, password })
+  });
+  const ct = res.headers.get("content-type") || "";
+  const payload = ct.includes("application/json") ? await res.json() : await res.text();
+  if(!res.ok) throw new Error(typeof payload === "string" ? payload : (payload.detail || "Registration failed"));
+  return payload;
 }
 
 async function api(path, opts={}){
@@ -61,59 +48,37 @@ async function api(path, opts={}){
     ...opts,
     headers:{
       ...(opts.headers||{}),
-      Authorization:`Bearer ${token()}`
+      ...(token() ? { Authorization:`Bearer ${token()}` } : {})
     }
   });
-
-  if(res.ok){
-    const ct = res.headers.get("content-type") || "";
-    if(ct.includes("application/json")) return await res.json();
-    return await res.text();
-  }
-
-  const t = await res.text();
-  const j = tryParseJsonText(t);
-  // FastAPI sometimes returns JSON text; sometimes a plain string
-  const err = new Error(typeof j === "object" ? (j.detail?.message || j.detail || t) : t);
-  err.status = res.status;
-  err.raw = t;
-  err.json = j;
-  throw err;
+  const ct = res.headers.get("content-type") || "";
+  const payload = ct.includes("application/json") ? await res.json() : await res.text();
+  if(!res.ok) throw new Error(typeof payload === "string" ? payload : (payload.detail || "Error"));
+  return payload;
 }
 
-async function apiGet(path){ return await api(path); }
-async function apiPost(path, json){
-  return await api(path,{
+async function listTools(startIso, endIso){
+  const qs = new URLSearchParams({ start_ts: startIso, end_ts: endIso });
+  return await api(`/tools?${qs.toString()}`);
+}
+
+async function createOrder(){
+  return await api(`/orders`, { method:"POST" });
+}
+
+async function addLine(orderId, toolId, qty, startIso, endIso){
+  return await api(`/orders/${orderId}/lines`, {
     method:"POST",
     headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify(json)
+    body: JSON.stringify({ tool_id: toolId, qty, start_ts: startIso, end_ts: endIso })
   });
 }
-async function apiPut(path, json){
-  return await api(path,{
-    method:"PUT",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify(json)
-  });
-}
-async function apiDelete(path){
-  return await api(path,{ method:"DELETE" });
+
+async function confirmOrder(orderId){
+  return await api(`/orders/${orderId}/confirm`, { method:"POST" });
 }
 
-async function ensureDraftOrder(){
-  let id = localStorage.getItem("draft_order_id");
-  if(id) return id;
-  const res = await apiPost("/orders", {});
-  localStorage.setItem("draft_order_id", res.id);
-  return res.id;
-}
-
-// Cart drawer helpers
-function openCart(){
-  document.getElementById("overlay").classList.add("show");
-  document.getElementById("drawer").classList.add("show");
-}
-function closeCart(){
-  document.getElementById("overlay").classList.remove("show");
-  document.getElementById("drawer").classList.remove("show");
-}
+window.CustomerAPI = {
+  token, role, setAuth, clearAuth,
+  login, registerCustomer, listTools, createOrder, addLine, confirmOrder
+};

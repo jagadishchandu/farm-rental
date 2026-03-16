@@ -2,89 +2,79 @@
 from datetime import datetime
 from sqlalchemy import (
     Boolean,
-    CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
-    Numeric,
     String,
-    Text,
     UniqueConstraint,
+    Index,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-
 
 class Base(DeclarativeBase):
     pass
 
-
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint("email", name="uq_users_email"),
+        Index("ix_users_role", "role"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    email: Mapped[str] = mapped_column(String(320), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(32), nullable=False, default="customer")  # admin|customer
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    orders: Mapped[list["RentalOrder"]] = relationship(back_populates="user")
-
-
 class Tool(Base):
     __tablename__ = "tools"
+    __table_args__ = (Index("ix_tools_active", "active"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
-    category: Mapped[str] = mapped_column(String(120), nullable=False, default="general")
-    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    hourly_rate: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0)
-    image_url: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    category: Mapped[str] = mapped_column(String(100), nullable=False, default="general")
+    description: Mapped[str] = mapped_column(String(2000), nullable=False, default="")
+    hourly_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    image_url: Mapped[str] = mapped_column(String(1000), nullable=False, default="")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     inventory: Mapped["ToolInventory"] = relationship(back_populates="tool", uselist=False)
-    lines: Mapped[list["RentalLine"]] = relationship(back_populates="tool")
-
 
 class ToolInventory(Base):
     __tablename__ = "tool_inventory"
 
-    tool_id: Mapped[int] = mapped_column(ForeignKey("tools.id", ondelete="CASCADE"), primary_key=True)
+    tool_id: Mapped[int] = mapped_column(
+        ForeignKey("tools.id", ondelete="CASCADE"), primary_key=True
+    )
     total_qty: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     tool: Mapped[Tool] = relationship(back_populates="inventory")
 
-    __table_args__ = (
-        CheckConstraint("total_qty >= 0", name="ck_total_qty_nonneg"),
-    )
-
-
 class RentalOrder(Base):
     __tablename__ = "rental_orders"
+    __table_args__ = (Index("ix_rental_orders_user_status", "user_id", "status"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")  # draft|confirmed|cancelled
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
-    user: Mapped[User] = relationship(back_populates="orders")
-    lines: Mapped[list["RentalLine"]] = relationship(back_populates="order", cascade="all, delete-orphan")
-
-
 class RentalLine(Base):
     __tablename__ = "rental_lines"
+    __table_args__ = (
+        Index("ix_rental_lines_tool", "tool_id"),
+        Index("ix_rental_lines_order", "order_id"),
+        Index("ix_rental_lines_window", "start_ts", "end_ts"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    order_id: Mapped[int] = mapped_column(ForeignKey("rental_orders.id", ondelete="CASCADE"), nullable=False)
-    tool_id: Mapped[int] = mapped_column(ForeignKey("tools.id", ondelete="RESTRICT"), nullable=False)
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("rental_orders.id", ondelete="CASCADE"), nullable=False
+    )
+    tool_id: Mapped[int] = mapped_column(ForeignKey("tools.id"), nullable=False)
+
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     start_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-    order: Mapped[RentalOrder] = relationship(back_populates="lines")
-    tool: Mapped[Tool] = relationship(back_populates="lines")
-
-    __table_args__ = (
-        CheckConstraint("qty > 0", name="ck_qty_pos"),
-        CheckConstraint("end_ts > start_ts", name="ck_end_after_start"),
-        UniqueConstraint("order_id", "tool_id", "start_ts", "end_ts", name="uq_line_dedup"),
-    )
